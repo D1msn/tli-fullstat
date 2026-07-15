@@ -149,8 +149,7 @@ $('#search').oninput=renderList;
 $('#presetReal').onclick=()=>setEnabled(['Rehan 2','Carino 2','Carino 3','Gemma 2','Moto 2','Bing 1','Bing 2']);
 $('#presetNoPets').onclick=()=>setEnabled(['Rehan 2','Carino 2','Carino 3','Gemma 2','Bing 1','Bing 2','Gemma 1','Youga 2']);
 $('#removeDisliked').onclick=()=>{ const bad=new Set(['Rosa 2','Iris 1','Iris 2','Moto 1','Erika 1','Erika 2','Erika 3']); items.forEach(i=>{ if(bad.has(i.name)) i.enabled=false; }); save(); renderList(); draw(); };
-$('#addCustom').onclick=()=>{ const lines=$('#customText').value.split(/
-+/).map(s=>s.trim()).filter(Boolean); for(const name of lines){ if(!items.some(i=>i.name===name)) items.push({id:'custom:'+name+':'+Date.now()+Math.random(),name,title:name,icon:'',enabled:true,custom:true,color:COLORS[items.length%COLORS.length]}); } $('#customText').value=''; save(); renderList(); draw(); };
+$('#addCustom').onclick=()=>{ const lines=$('#customText').value.split(/\n+/).map(s=>s.trim()).filter(Boolean); for(const name of lines){ if(!items.some(i=>i.name===name)) items.push({id:'custom:'+name+':'+Date.now()+Math.random(),name,title:name,icon:'',enabled:true,custom:true,color:COLORS[items.length%COLORS.length]}); } $('#customText').value=''; save(); renderList(); draw(); };
 $('#clearCustom').onclick=()=>{ items=items.filter(i=>!i.custom); save(); renderList(); draw(); };
 load(); renderList(); draw();
 </script>
