@@ -148,6 +148,30 @@ function cryptoId(){ const a=new Uint32Array(2); crypto.getRandomValues(a); retu
 function spinDurationMs(){ return Math.round(Number($('#durationRange').value||4.2)*1000); }
 function showResult(it,meta=''){ $('#result').innerHTML=`${it.icon?`<img src="${it.icon}" alt="">`:''}<div><div class="muted">Выпало:</div><b>${it.name}</b><div class="tiny">${it.title||''}</div>${meta?`<div class="tiny">${meta}</div>`:''}</div>`; }
 function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
+function unbiasedIndexFromPool(pool,max){
+  const limit=Math.floor(0x100000000/max)*max;
+  const used=new Set();
+  while(used.size<pool.length){
+    const pos=cryptoInt(pool.length);
+    if(used.has(pos)) continue;
+    used.add(pos);
+    const raw=pool[pos]>>>0;
+    if(raw<limit) return {index:raw%max, picked:raw, rejected:used.size-1, fallback:false};
+  }
+  return {index:cryptoInt(max), picked:null, rejected:used.size, fallback:true};
+}
+function startPreSpin(){
+  let active=true, last=performance.now();
+  function frame(now){
+    if(!active) return;
+    const dt=now-last; last=now;
+    angle=(angle + dt*0.006)%(Math.PI*2);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  return ()=>{ active=false; };
+}
 async function chooseWinnerIndex(arr,dur){
   if(!$('#entropyMode').checked) return {index:cryptoInt(arr.length), meta:'crypto direct'};
   const seconds=Math.max(1, Math.ceil(dur/1000));
@@ -157,24 +181,30 @@ async function chooseWinnerIndex(arr,dur){
     $('#entropyStatus').textContent=`Накопление crypto: ${i+1}/${seconds}, число ${n}`;
     await wait(1000);
   }
-  const picked=pool[cryptoInt(pool.length)];
-  $('#entropyStatus').textContent=`Выбрано одно из ${pool.length} чисел: ${picked}`;
-  return {index:picked%arr.length, meta:`entropy mode: ${pool.length} чисел, выбрано ${picked}`};
+  const r=unbiasedIndexFromPool(pool, arr.length);
+  const tail=r.rejected?`, хвостовых отклонено: ${r.rejected}`:'';
+  const fallback=r.fallback?', fallback cryptoInt':'';
+  $('#entropyStatus').textContent=`Выбрано число: ${r.picked ?? 'fallback'}${tail}${fallback}`;
+  return {index:r.index, meta:`entropy mode: ${pool.length} чисел, выбрано ${r.picked ?? 'fallback'}${tail}${fallback}`};
 }
 async function spin(){
   const arr=enabled(); if(spinning||!arr.length) return; spinning=true;
   const dur=spinDurationMs();
+  const entropy=$('#entropyMode').checked;
   $('#spinBtn').disabled=true; $('#spinCenter').style.pointerEvents='none';
-  $('#entropyStatus').textContent=$('#entropyMode').checked?'Генерирую crypto-числа каждую секунду...':'Рандом: crypto direct';
+  $('#entropyStatus').textContent=entropy?'Генерирую crypto-числа каждую секунду...':'Рандом: crypto direct';
+  const stopPreSpin=entropy?startPreSpin():null;
   const {index:winnerIndex, meta}=await chooseWinnerIndex(arr,dur);
+  if(stopPreSpin) stopPreSpin();
+  const finalDur=entropy?2200:dur;
   const step=Math.PI*2/arr.length;
   const targetPointer=-Math.PI/2;
   const sectorCenter=winnerIndex*step-Math.PI/2+step/2;
-  const extraTurns=6+cryptoInt(4);
+  const extraTurns=entropy?3+cryptoInt(3):6+cryptoInt(4);
   const targetAngle=targetPointer-sectorCenter+extraTurns*Math.PI*2;
   const start=angle, delta=targetAngle-start, t0=performance.now();
   function ease(t){ return 1-Math.pow(1-t,4); }
-  function frame(now){ const p=Math.min(1,(now-t0)/dur); angle=start+delta*ease(p); draw(); if(p<1) requestAnimationFrame(frame); else { angle=((angle%(Math.PI*2))+Math.PI*2)%(Math.PI*2); spinning=false; $('#spinBtn').disabled=false; $('#spinCenter').style.pointerEvents='auto'; draw(); showResult(arr[winnerIndex],meta); } }
+  function frame(now){ const p=Math.min(1,(now-t0)/finalDur); angle=start+delta*ease(p); draw(); if(p<1) requestAnimationFrame(frame); else { angle=((angle%(Math.PI*2))+Math.PI*2)%(Math.PI*2); spinning=false; $('#spinBtn').disabled=false; $('#spinCenter').style.pointerEvents='auto'; draw(); showResult(arr[winnerIndex],meta); } }
   requestAnimationFrame(frame);
 }
 $('#spinBtn').onclick=spin; $('#spinCenter').onclick=spin;
