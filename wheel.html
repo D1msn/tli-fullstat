@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TLI SS13 — Random Hero Wheel</title>
+  <style>
+    :root { --bg:#0b1020; --panel:#111936; --panel2:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --line:rgba(148,163,184,.22); --accent:#60a5fa; --good:#22c55e; --bad:#ef4444; }
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at top,#18213d 0,#0b1020 42%,#070b16 100%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    .wrap{max-width:1180px;margin:0 auto;padding:20px}
+    a{color:#93c5fd} .top{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:16px}
+    h1{font-size:24px;margin:0} .muted{color:var(--muted)}
+    .grid{display:grid;grid-template-columns:minmax(320px,1fr) 380px;gap:16px;align-items:start}
+    .card{background:linear-gradient(180deg,rgba(17,25,54,.96),rgba(15,23,42,.96));border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+    .wheelBox{position:relative;display:grid;place-items:center;min-height:620px}
+    canvas{width:min(86vw,560px);height:min(86vw,560px);max-width:560px;max-height:560px;filter:drop-shadow(0 20px 40px rgba(0,0,0,.45))}
+    .pointer{position:absolute;top:22px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:18px solid transparent;border-right:18px solid transparent;border-top:42px solid #f8fafc;filter:drop-shadow(0 2px 5px rgba(0,0,0,.55));z-index:3}
+    .center{position:absolute;width:118px;height:118px;border-radius:999px;background:#0f172a;border:3px solid #e5e7eb;display:grid;place-items:center;text-align:center;font-weight:800;box-shadow:0 6px 24px rgba(0,0,0,.55);cursor:pointer;user-select:none}
+    .center:hover{background:#172554} .center small{display:block;color:var(--muted);font-weight:600;margin-top:2px}
+    .result{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:rgba(15,23,42,.85);display:flex;gap:12px;align-items:center;min-height:72px}
+    .result img,.hero img{width:42px;height:42px;border-radius:10px;object-fit:cover;background:#020617}
+    .result b{font-size:20px}
+    .controls{display:grid;gap:10px}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    button,input{font:inherit} button{border:1px solid var(--line);background:#1e293b;color:var(--text);border-radius:10px;padding:9px 11px;cursor:pointer}
+    button.primary{background:#2563eb;border-color:#60a5fa;font-weight:800} button.danger{background:#7f1d1d;border-color:#ef4444} button:hover{filter:brightness(1.1)}
+    input[type="search"],textarea{width:100%;background:#020617;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px}
+    textarea{min-height:86px;resize:vertical}
+    .count{font-weight:800;color:#bfdbfe}
+    .heroes{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+    .hero{display:grid;grid-template-columns:28px 42px 1fr;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid rgba(148,163,184,.12)}
+    .hero:last-child{border-bottom:0} .hero label{cursor:pointer} .hero small{display:block;color:var(--muted)}
+    .hero.off{opacity:.45} input[type="checkbox"]{width:18px;height:18px}
+    .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:5px 9px;background:rgba(15,23,42,.8);color:#cbd5e1;font-size:13px}
+    .tiny{font-size:12px;color:var(--muted)}
+    @media(max-width:900px){.grid{grid-template-columns:1fr}.wheelBox{min-height:auto}.pointer{top:8px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>TLI SS13 — колесо рандома</h1>
+        <div class="muted">Все персонажи включены по умолчанию. Можно выключать, искать, добавлять свои варианты.</div>
+      </div>
+      <div class="row"><a class="pill" href="index.html">← назад к fullStat</a><span class="pill"><span id="enabledCount">0</span> / <span id="totalCount">0</span> включено</span></div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="wheelBox">
+          <div class="pointer"></div>
+          <canvas id="wheel" width="900" height="900"></canvas>
+          <div class="center" id="spinCenter">КРУТИТЬ<small>click</small></div>
+        </div>
+        <div class="result" id="result"><span class="muted">Пока никто не выбран. Жми “Крутить”.</span></div>
+      </div>
+      <div class="card controls">
+        <div class="row">
+          <button class="primary" id="spinBtn">Крутить</button>
+          <button id="allBtn">Включить всех</button>
+          <button id="noneBtn">Выключить всех</button>
+          <button id="resetBtn">Сброс</button>
+        </div>
+        <input id="search" type="search" placeholder="Поиск героя: Carino, Rehan, Gemma..." />
+        <div class="row">
+          <button id="presetReal">Только реальные кандидаты</button>
+          <button id="presetNoPets">Без петоводов/тошнит</button>
+          <button class="danger" id="removeDisliked">Убрать то, что ты не хочешь</button>
+        </div>
+        <div class="tiny">Пресеты не удаляют список, только включают/выключают чекбоксы.</div>
+        <div class="heroes" id="heroes"></div>
+        <details>
+          <summary>Добавить свои варианты списком</summary>
+          <div class="tiny">Один вариант на строку. Иконок у кастомных не будет.</div>
+          <textarea id="customText" placeholder="Например:
+Carino 2 Ice Shot
+Rehan 2 Spectral Slash"></textarea>
+          <div class="row"><button id="addCustom">Добавить</button><button id="clearCustom">Убрать кастомные</button></div>
+        </details>
+        <div class="tiny">Состояние сохраняется в localStorage браузера.</div>
+      </div>
+    </div>
+  </div>
+<script>
+const BASE_HEROES = [{"name": "Bing 1", "title": "Escapist Bing | Blast Nova", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Bing/UI_Portrait_Bing_01_128.webp"}, {"name": "Bing 2", "title": "Escapist Bing | Creative Genius", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Bing/UI_Portrait_Bing_02_128.webp"}, {"name": "Carino 1", "title": "Divineshot Carino | Ranger of Glory", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Carino/UI_Portrait_Carino_01_128.webp"}, {"name": "Carino 2", "title": "Divineshot Carino | Lethal Flash", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Carino/UI_Portrait_Carino_02_128.webp"}, {"name": "Carino 3", "title": "Divineshot Carino | Zealot of War", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Carino/UI_Portrait_Carino_03_128.webp"}, {"name": "Erika 1", "title": "Cateye Erika | Wind Stalker", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Erika/UI_Portrait_Erika_01_128.webp"}, {"name": "Erika 2", "title": "Cateye Erika | Lightning Shadow", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Erika/UI_Portrait_Erika_02_128.webp"}, {"name": "Erika 3", "title": "Cateye Erika|Vendetta's Sting", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Erika/UI_Portrait_Erika_03_128.webp"}, {"name": "Gemma 1", "title": "Frostfire Gemma | Ice-Fire Fusion", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Gemma/UI_Portrait_Gemma_01_128.webp"}, {"name": "Gemma 2", "title": "Frostfire Gemma | Frostbitten Heart", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Gemma/UI_Portrait_Gemma_02_128.webp"}, {"name": "Gemma 3", "title": "Frostfire Gemma | Flame of Pleasure", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Gemma/UI_Portrait_Gemma_03_128.webp"}, {"name": "Iris 1", "title": "The Forsaken Iris | Growing Breeze", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Iris/UI_Portrait_Iris_01_128.webp"}, {"name": "Iris 2", "title": "The Forsaken Iris | Vigilant Breeze", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Iris/UI_Portrait_Iris_02_128.webp"}, {"name": "Moto 1", "title": "Commander Moto | Order Calling", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Moto/UI_Portrait_Moto_01_128.webp"}, {"name": "Moto 2", "title": "Commander Moto | Charge Calling", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Moto/UI_Portrait_Moto_02_128.webp"}, {"name": "Rehan 1", "title": "Berserker Rehan | Anger", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Rehan/UI_Portrait_Rehan_01_128.webp"}, {"name": "Rehan 2", "title": "Berserker Rehan | Seething Silhouette", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Rehan/UI_Portrait_Rehan_02_128.webp"}, {"name": "Rosa 1", "title": "Lightbringer Rosa | High Court Chariot", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Rosa/UI_Portrait_Rosa_01_128.webp"}, {"name": "Rosa 2", "title": "Lightbringer Rosa | Unsullied Blade", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Rosa/UI_Portrait_Rosa_02_128.webp"}, {"name": "Sage 1", "title": "Scent Weaver Sage|Licorice Note", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Sage/UI_Portrait_Sage_01_128.webp"}, {"name": "Selena 1", "title": "Tide Whisper Selena | Sing with the Tide", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Selena/UI_Portrait_Selena_01_128.webp"}, {"name": "Thea 1", "title": "Oracle Thea | Wisdom of The Gods", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Thea/UI_Portrait_Thea_01_128.webp"}, {"name": "Thea 2", "title": "Oracle Thea | Incarnation of The Gods", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Thea/UI_Portrait_Thea_02_128.webp"}, {"name": "Thea 3", "title": "Oracle Thea | Blasphemer", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Thea/UI_Portrait_Thea_03_128.webp"}, {"name": "Youga 1", "title": "Spacetime Witness Youga | Spacetime Illusion", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Youga/UI_Portrait_Youga_01_128.webp"}, {"name": "Youga 2", "title": "Spacetime Witness Youga | Spacetime Elapse", "icon": "https://cdn.tlidb.com/UI/Textures/Common/Icon/Portrait/Youga/UI_Portrait_Youga_02_128.webp"}];
+const COLORS = ["#ef4444", "#f97316", "#f59e0b", "#84cc16", "#22c55e", "#14b8a6", "#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e"];
+const LS_KEY = 'tli-random-wheel-v1';
+let items = [];
+let angle = 0;
+let spinning = false;
+const canvas = document.getElementById('wheel');
+const ctx = canvas.getContext('2d');
+const $ = s => document.querySelector(s);
+function defaultItems(){ return BASE_HEROES.map((h,i)=>({...h, id:'base:'+h.name, enabled:true, custom:false, color:COLORS[i%COLORS.length]})); }
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(items.map(i=>({id:i.id,name:i.name,title:i.title,icon:i.icon,enabled:i.enabled,custom:i.custom,color:i.color})))); }
+function load(){ try{ const raw=localStorage.getItem(LS_KEY); if(!raw) throw 0; const saved=JSON.parse(raw); const byId=new Map(saved.map(x=>[x.id,x])); items=defaultItems().map(x=>Object.assign(x, byId.get(x.id)||{})); for(const x of saved) if(x.custom && !items.some(i=>i.id===x.id)) items.push(x); }catch{ items=defaultItems(); } }
+function enabled(){ return items.filter(i=>i.enabled); }
+function draw(){
+  const w=canvas.width,h=canvas.height,cx=w/2,cy=h/2,r=Math.min(w,h)*0.45;
+  ctx.clearRect(0,0,w,h);
+  const arr=enabled();
+  $('#enabledCount').textContent=arr.length; $('#totalCount').textContent=items.length;
+  if(!arr.length){
+    ctx.fillStyle='#111827'; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#e5e7eb'; ctx.font='bold 34px system-ui'; ctx.textAlign='center'; ctx.fillText('Включи хотя бы 1 вариант',cx,cy);
+    return;
+  }
+  const step=Math.PI*2/arr.length;
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(angle); ctx.translate(-cx,-cy);
+  arr.forEach((it,i)=>{
+    const a0=i*step-Math.PI/2, a1=a0+step;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,a0,a1); ctx.closePath();
+    ctx.fillStyle=it.color||COLORS[i%COLORS.length]; ctx.fill();
+    ctx.strokeStyle='rgba(15,23,42,.55)'; ctx.lineWidth=3; ctx.stroke();
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(a0+step/2); ctx.textAlign='right'; ctx.fillStyle='white';
+    ctx.font=arr.length>18?'bold 19px system-ui':'bold 24px system-ui';
+    ctx.shadowColor='rgba(0,0,0,.7)'; ctx.shadowBlur=4;
+    const text=it.name.length>18?it.name.slice(0,17)+'…':it.name;
+    ctx.fillText(text,r-22,7); ctx.restore();
+  });
+  ctx.restore();
+  ctx.beginPath(); ctx.arc(cx,cy,r+2,0,Math.PI*2); ctx.strokeStyle='rgba(226,232,240,.75)'; ctx.lineWidth=5; ctx.stroke();
+}
+function renderList(){
+  const q=$('#search').value.toLowerCase();
+  $('#heroes').innerHTML=items.filter(i=>(i.name+' '+i.title).toLowerCase().includes(q)).map(it=>`<div class="hero ${it.enabled?'':'off'}"><input type="checkbox" data-id="${it.id}" ${it.enabled?'checked':''}><img src="${it.icon||''}" onerror="this.style.visibility='hidden'" alt=""><label><b>${it.name}</b><small>${it.title||''}</small></label></div>`).join('');
+  document.querySelectorAll('.hero input').forEach(ch=>ch.onchange=()=>{ const it=items.find(i=>i.id===ch.dataset.id); if(it) it.enabled=ch.checked; save(); renderList(); draw(); });
+}
+function setEnabled(names){ const s=new Set(names); items.forEach(i=>i.enabled=s.has(i.name)); save(); renderList(); draw(); }
+function showResult(it){ $('#result').innerHTML=`${it.icon?`<img src="${it.icon}" alt="">`:''}<div><div class="muted">Выпало:</div><b>${it.name}</b><div class="tiny">${it.title||''}</div></div>`; }
+function spin(){
+  const arr=enabled(); if(spinning||!arr.length) return; spinning=true;
+  const step=Math.PI*2/arr.length;
+  const winnerIndex=Math.floor(Math.random()*arr.length);
+  const targetPointer=-Math.PI/2;
+  const sectorCenter=winnerIndex*step-Math.PI/2+step/2;
+  const extraTurns=6+Math.floor(Math.random()*4);
+  const targetAngle=targetPointer-sectorCenter+extraTurns*Math.PI*2;
+  const start=angle, delta=targetAngle-start, dur=4200, t0=performance.now();
+  function ease(t){ return 1-Math.pow(1-t,4); }
+  function frame(now){ const p=Math.min(1,(now-t0)/dur); angle=start+delta*ease(p); draw(); if(p<1) requestAnimationFrame(frame); else { angle=((angle%(Math.PI*2))+Math.PI*2)%(Math.PI*2); spinning=false; draw(); showResult(arr[winnerIndex]); } }
+  requestAnimationFrame(frame);
+}
+$('#spinBtn').onclick=spin; $('#spinCenter').onclick=spin;
+$('#allBtn').onclick=()=>{items.forEach(i=>i.enabled=true); save(); renderList(); draw();};
+$('#noneBtn').onclick=()=>{items.forEach(i=>i.enabled=false); save(); renderList(); draw();};
+$('#resetBtn').onclick=()=>{localStorage.removeItem(LS_KEY); load(); renderList(); draw(); $('#result').innerHTML='<span class="muted">Сброшено. Все базовые персонажи включены.</span>';};
+$('#search').oninput=renderList;
+$('#presetReal').onclick=()=>setEnabled(['Rehan 2','Carino 2','Carino 3','Gemma 2','Moto 2','Bing 1','Bing 2']);
+$('#presetNoPets').onclick=()=>setEnabled(['Rehan 2','Carino 2','Carino 3','Gemma 2','Bing 1','Bing 2','Gemma 1','Youga 2']);
+$('#removeDisliked').onclick=()=>{ const bad=new Set(['Rosa 2','Iris 1','Iris 2','Moto 1','Erika 1','Erika 2','Erika 3']); items.forEach(i=>{ if(bad.has(i.name)) i.enabled=false; }); save(); renderList(); draw(); };
+$('#addCustom').onclick=()=>{ const lines=$('#customText').value.split(/
++/).map(s=>s.trim()).filter(Boolean); for(const name of lines){ if(!items.some(i=>i.name===name)) items.push({id:'custom:'+name+':'+Date.now()+Math.random(),name,title:name,icon:'',enabled:true,custom:true,color:COLORS[items.length%COLORS.length]}); } $('#customText').value=''; save(); renderList(); draw(); };
+$('#clearCustom').onclick=()=>{ items=items.filter(i=>!i.custom); save(); renderList(); draw(); };
+load(); renderList(); draw();
+</script>
+</body>
+</html>
