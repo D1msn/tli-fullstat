@@ -125,15 +125,35 @@ function b64urlDecode(str){ str=str.replace(/-/g,'+').replace(/_/g,'/'); while(s
 function exportState(){
   return {v:1, mode:currentMode, duration:Number($('#durationRange').value||4.2), entropy:$('#entropyMode').checked, items:items.map(i=>({name:i.name,title:i.title||'',icon:i.icon||'',enabled:!!i.enabled,custom:!!i.custom,color:i.color||''}))};
 }
-function stateUrl(){ const u=new URL(location.href); u.searchParams.set('wheel', b64urlEncode(JSON.stringify(exportState()))); return u.toString(); }
-async function copyShareUrl(){ const url=stateUrl(); try{ await navigator.clipboard.writeText(url); $('#entropyStatus').textContent='Ссылка на это колесо скопирована.'; }catch{ prompt('Скопируй ссылку:', url); } }
+function compactState(){
+  const src=sourceItems();
+  const baseNames=new Set(src.map(x=>x.name));
+  const enabledIdx=[];
+  const custom=[];
+  items.forEach((it,idx)=>{ if(it.enabled && idx<src.length && it.name===src[idx].name) enabledIdx.push(idx); else if(it.custom || !baseNames.has(it.name)) custom.push({n:it.name,t:it.title||'',e:!!it.enabled}); });
+  return {v:2,m:currentMode,d:Number($('#durationRange').value||4.2),e:$('#entropyMode').checked?1:0,on:enabledIdx,c:custom};
+}
+function stateUrl(){ const u=new URL(location.origin+location.pathname); u.searchParams.set('w', b64urlEncode(JSON.stringify(compactState()))); return u.toString(); }
+async function copyShareUrl(){ const url=stateUrl(); try{ await navigator.clipboard.writeText(url); $('#entropyStatus').textContent='Короткая ссылка на это колесо скопирована.'; }catch{ prompt('Скопируй ссылку:', url); } }
+function applyCompactState(st){
+  currentMode=st.m||'heroes';
+  const src=sourceItems();
+  const on=new Set(st.on||[]);
+  items=src.map((x,i)=>({...x,id:'shared:'+currentMode+':'+i,enabled:on.has(i),custom:false,color:COLORS[i%COLORS.length]}));
+  for(const x of (st.c||[])) items.push({id:'shared-custom:'+cryptoId(),name:x.n,title:x.t||x.n,icon:'',enabled:x.e!==false,custom:true,color:COLORS[items.length%COLORS.length]});
+  $('#durationRange').value=String(st.d||4.2); $('#durationLabel').textContent=$('#durationRange').value; $('#entropyMode').checked=!!st.e;
+}
+function applyFullState(st){
+  currentMode=st.mode||'heroes';
+  items=(st.items||[]).map((x,i)=>({id:'shared:'+i+':'+x.name, name:x.name, title:x.title||x.name, icon:x.icon||'', enabled:x.enabled!==false, custom:!!x.custom, color:x.color||COLORS[i%COLORS.length]}));
+  $('#durationRange').value=String(st.duration||4.2); $('#durationLabel').textContent=$('#durationRange').value; $('#entropyMode').checked=!!st.entropy;
+}
 function applySharedState(){
-  const raw=new URL(location.href).searchParams.get('wheel'); if(!raw) return false;
+  const params=new URL(location.href).searchParams;
+  const raw=params.get('w')||params.get('wheel'); if(!raw) return false;
   try{
     const st=JSON.parse(b64urlDecode(raw));
-    currentMode=st.mode||'heroes';
-    items=(st.items||[]).map((x,i)=>({id:'shared:'+i+':'+x.name, name:x.name, title:x.title||x.name, icon:x.icon||'', enabled:x.enabled!==false, custom:!!x.custom, color:x.color||COLORS[i%COLORS.length]}));
-    $('#durationRange').value=String(st.duration||4.2); $('#durationLabel').textContent=$('#durationRange').value; $('#entropyMode').checked=!!st.entropy;
+    if(st.v===2) applyCompactState(st); else applyFullState(st);
     renderList(); draw(); $('#modeInfo').textContent='Колесо: загружено из ссылки.'; ['Heroes','Starters','Popular'].forEach(n=>$('#mode'+n).classList.remove('primary'));
     $('#entropyStatus').textContent='Загружено из share-ссылки. Можно крутить или менять список.';
     return true;
