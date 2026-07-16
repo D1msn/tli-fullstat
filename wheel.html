@@ -62,6 +62,7 @@
           <button id="allBtn">Включить всех</button>
           <button id="noneBtn">Выключить всех</button>
           <button id="resetBtn">Сброс</button>
+          <button id="shareBtn">Скопировать ссылку</button>
         </div>
         <div class="setting">
           <div class="row">
@@ -119,6 +120,25 @@ function defaultItems(){ return sourceItems().map((h,i)=>({...h, id:currentMode+
 function save(){ localStorage.setItem(LS_KEY+':'+currentMode, JSON.stringify(items.map(i=>({id:i.id,name:i.name,title:i.title,icon:i.icon,enabled:i.enabled,custom:i.custom,color:i.color})))); }
 function load(){ try{ const raw=localStorage.getItem(LS_KEY+':'+currentMode); if(!raw) throw 0; const saved=JSON.parse(raw); const byId=new Map(saved.map(x=>[x.id,x])); items=defaultItems().map(x=>Object.assign(x, byId.get(x.id)||{})); for(const x of saved) if(x.custom && !items.some(i=>i.id===x.id)) items.push(x); }catch{ items=defaultItems(); } }
 function setMode(mode){ currentMode=mode; load(); renderList(); draw(); $('#modeInfo').textContent='Колесо: '+modeTitle()+'.'; ['Heroes','Starters','Popular'].forEach(n=>$('#mode'+n).classList.toggle('primary', currentMode===n.toLowerCase() || (n==='Popular'&&currentMode==='popular'))); }
+function b64urlEncode(str){ return btoa(unescape(encodeURIComponent(str))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+function b64urlDecode(str){ str=str.replace(/-/g,'+').replace(/_/g,'/'); while(str.length%4) str+='='; return decodeURIComponent(escape(atob(str))); }
+function exportState(){
+  return {v:1, mode:currentMode, duration:Number($('#durationRange').value||4.2), entropy:$('#entropyMode').checked, items:items.map(i=>({name:i.name,title:i.title||'',icon:i.icon||'',enabled:!!i.enabled,custom:!!i.custom,color:i.color||''}))};
+}
+function stateUrl(){ const u=new URL(location.href); u.searchParams.set('wheel', b64urlEncode(JSON.stringify(exportState()))); return u.toString(); }
+async function copyShareUrl(){ const url=stateUrl(); try{ await navigator.clipboard.writeText(url); $('#entropyStatus').textContent='Ссылка на это колесо скопирована.'; }catch{ prompt('Скопируй ссылку:', url); } }
+function applySharedState(){
+  const raw=new URL(location.href).searchParams.get('wheel'); if(!raw) return false;
+  try{
+    const st=JSON.parse(b64urlDecode(raw));
+    currentMode=st.mode||'heroes';
+    items=(st.items||[]).map((x,i)=>({id:'shared:'+i+':'+x.name, name:x.name, title:x.title||x.name, icon:x.icon||'', enabled:x.enabled!==false, custom:!!x.custom, color:x.color||COLORS[i%COLORS.length]}));
+    $('#durationRange').value=String(st.duration||4.2); $('#durationLabel').textContent=$('#durationRange').value; $('#entropyMode').checked=!!st.entropy;
+    renderList(); draw(); $('#modeInfo').textContent='Колесо: загружено из ссылки.'; ['Heroes','Starters','Popular'].forEach(n=>$('#mode'+n).classList.remove('primary'));
+    $('#entropyStatus').textContent='Загружено из share-ссылки. Можно крутить или менять список.';
+    return true;
+  }catch(e){ $('#entropyStatus').textContent='Не смог загрузить wheel из ссылки: '+e.message; return false; }
+}
 function enabled(){ return items.filter(i=>i.enabled); }
 function draw(){
   const w=canvas.width,h=canvas.height,cx=w/2,cy=h/2,r=Math.min(w,h)*0.45;
@@ -225,7 +245,8 @@ async function spin(){
 $('#spinBtn').onclick=spin; $('#spinCenter').onclick=spin;
 $('#allBtn').onclick=()=>{items.forEach(i=>i.enabled=true); save(); renderList(); draw();};
 $('#noneBtn').onclick=()=>{items.forEach(i=>i.enabled=false); save(); renderList(); draw();};
-$('#resetBtn').onclick=()=>{localStorage.removeItem(LS_KEY); load(); renderList(); draw(); $('#result').innerHTML='<span class="muted">Сброшено. Сброшено текущее колесо.</span>';};
+$('#resetBtn').onclick=()=>{localStorage.removeItem(LS_KEY+':'+currentMode); load(); renderList(); draw(); $('#result').innerHTML='<span class="muted">Сброшено текущее колесо.</span>';};
+$('#shareBtn').onclick=copyShareUrl;
 $('#search').oninput=renderList;
 $('#durationRange').oninput=()=>$('#durationLabel').textContent=$('#durationRange').value;
 $('#modeHeroes').onclick=()=>setMode('heroes');
@@ -236,7 +257,7 @@ $('#presetNoPets').onclick=()=>setEnabled(['Rehan 2','Carino 2','Carino 3','Gemm
 $('#removeDisliked').onclick=()=>{ const bad=new Set(['Rosa 2','Iris 1','Iris 2','Moto 1','Erika 1','Erika 2','Erika 3']); items.forEach(i=>{ if(bad.has(i.name)) i.enabled=false; }); save(); renderList(); draw(); };
 $('#addCustom').onclick=()=>{ const lines=$('#customText').value.split(/\n+/).map(s=>s.trim()).filter(Boolean); for(const name of lines){ if(!items.some(i=>i.name===name)) items.push({id:'custom:'+name+':'+Date.now()+':'+cryptoId(),name,title:name,icon:'',enabled:true,custom:true,color:COLORS[items.length%COLORS.length]}); } $('#customText').value=''; save(); renderList(); draw(); };
 $('#clearCustom').onclick=()=>{ items=items.filter(i=>!i.custom); save(); renderList(); draw(); };
-setMode('heroes');
+if(!applySharedState()) setMode('heroes');
 </script>
 </body>
 </html>
